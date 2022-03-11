@@ -1,0 +1,22 @@
+install.packages('ipumsr')
+install.packages('haven')
+library(tidyverse)
+library(purrr)
+library(lubridate)
+library(vtable)
+library(car)
+library(jtools)
+library(fixest)
+library(wooldridge)
+library(stringr)
+library(vtable)
+library(plm)
+
+data <- read_csv("Data_Translation_Assignment/Data/cps_00003.csv")
+ind <- read_csv('Data_Translation_Assignment/Data/indnames.csv')
+ind <- ind %>% mutate(IND = ind)
+
+data1 <- left_join(data, ind)
+
+data_part1 <- data1 %>% filter(YEAR != c(2021, 2022) & indname == "Retail Trade")
+data_part1 <- data_part1 %>% mutate()
