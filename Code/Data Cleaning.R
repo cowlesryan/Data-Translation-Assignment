@@ -67,4 +67,4 @@ export_summs(model2)
 
 model1 <- rdrobust(data_part6$urate, data_part6$date_centered, c = 0)
 
-rdplot(data_part6$urate, data_part6$date_centered)
+rdplot(data_part6$urate, data_part6$date_centered) 
