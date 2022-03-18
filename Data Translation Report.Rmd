@@ -1,0 +1,168 @@
+---
+title: "Data Translation Assignment"
+author: "Kyle Bailey, Ryan Cowles, Joshua Jayandran, Samuel Suk, George Thiss, and  Octavian Tofoleanu"
+output: html_document
+---
+
+```{r, echo = FALSE}
+library(tidyverse)
+library(purrr)
+library(lubridate)
+library(vtable)
+library(car)
+library(jtools)
+library(fixest)
+library(wooldridge)
+library(stringr)
+library(vtable)
+library(plm)
+library(rdrobust)
+
+data_part6 <- read_csv("Data/FinalData.csv")
+data_part6 <- data_part6 %>% mutate(familyincome = factor(familyincome), education = factor(education), race = factor(race), REGION = factor(REGION), indname = factor(indname), familyincome2 = factor(familyincome2), region = factor(region))
+data_test <- data_part6 %>% filter(date < ymd("2019-01-01"))
+data_part6 <- data_part6 %>% filter(date >= ymd("2019-01-01"))
+data_part6 <- within(data_part6, familyincome <- relevel(familyincome, ref = "lowearner"))
+data_part6 <- within(data_part6, education <- relevel(education, ref = "highschool"))
+data_part6 <- within(data_part6, indname <- relevel(indname, ref = "Retail Trade"))
+data_part6 <- within(data_part6, familyincome2 <- relevel(familyincome2, ref = "bottom25%"))
+data_part6 <- within(data_part6, region <- relevel(region, ref = "PacificDivision"))
+
+data_test <- within(data_test, familyincome <- relevel(familyincome, ref = "lowearner"))
+data_test <- within(data_test, education <- relevel(education, ref = "highschool"))
+data_test <- within(data_test, indname <- relevel(indname, ref = "Retail Trade"))
+data_test <- within(data_test, familyincome2 <- relevel(familyincome2, ref = "bottom25%"))
+data_test <- within(data_test, region <- relevel(region, ref = "PacificDivision"))
+
+data_only_retail <- data_part6 %>% filter(indname == "Retail Trade")
+```
+Introduction:
+
+Our initial exploration of the data showed Covid had a strong effect on unemployment. We plotted the unemployment rate (calculated by taking the ratio of those employed vs unemployed found within the data) over time. We saw a sharp jump discontinuity in April of 2020 with a nearly 9% increase in unemployment following our defined start of Covid. Both our linear and polynomial models of the graphs supported this. Given this, we choose to create various models to analyze different factors' effect on unemployment in a post-Covid world. Our regression analyses primarily focused on the variables we felt would impact unemployment like employment sector, region, education level, and race.
+
+Methodology:
+
+We are using regression discontinuity analysis because we want to observe the effect of Covid on employment across a two year period. Discontinuity works best because we want to know the short-term effect of Covid. Covid had a universal impact on employees of all industries, so through the following regressions, we are exploring how different workers were affected. First we observe how workers in the retail industry fared past the Covid cutoff. Following retail, we see how the industry itself compares to all other industries. Our last series of regressions observed how the unemployment rate changed for month-based groups along education and then total annual household income controls. We grouped income levels between those below the national median and those above.
+Another reason why RD works is because it pulls helpful and specific estimated treatment effects both immediately after the cut off month, and the remaining months of 2020. Adding additional controls like industry, geographic region, education level, and race allow us to compare the various effects Covid on different groups with regards to the unemployment rate. We define unemployment rate by the number employed and unemployed per month from the IPUMs data. We also have to recognize some generalizability -- Covid and its associated lockdowns were not a one time effect, it was a prolonged occurrence over the coming two years, having a simultaneous impact on health which could affect employment status, as well as the economy vis-a-vis the state mandated closures of businesses. The best we can do working around this historic reality is by narrowing our study to just the immediate effect of Covid on observed workers with regards to their employment status which we transformed into unemployment rates per month. Additionally, not all states implemented lockdowns at the same time, which means the unemployment rate could vary across regions, which we ended up controlling for as well with the Pacific coast states as our base (intercept) for comparison.
+
+Key Assumptions
+-Our first assumption is necessary as a prerequisite for RD models, that the error term does not jump to the point of discontinuity. In this case, we’re assuming no other variable besides Covid is explaining the dramatic effect on the unemployment rate at the cutoff.
+-According to the CDC, March 15th was when states began implementing lockdowns in the US, which would correlate with the 15th month in our data set; however, we use April (16th month) as the cut off month for our time based running variable because we want to account for the lag effect of policy on the labor economy.
+-We’re assuming individuals in April who lost their jobs, and thereby contribute to the unemployment rate, did not do so through self-selection or any form of manipulation because the incentive to lose one’s job is minimal as it means sacrificing earnings. Besides a person’s industry, geography, education, and race, we’re assuming no outlying difference among individuals around the cutoff.
+
+
+Graph of Unemployment Rate and Date Across all Industries 2018 and 2019:
+```{r}
+linear_graph7 <- data_test %>%
+  ggplot(aes(x = date, y = urate, col = covid)) +
+  geom_point() + 
+  geom_vline(xintercept = ymd("2018-04-01")) +
+  ylab("Unemployment Rate") +
+  xlab("Date") +
+  geom_smooth(aes(group = covid), method = 'lm', formula = y ~ x)
+linear_graph7
+```
+Graph of Unemployment Rate and Date for 2019 and 2021 Across all Industries:
+```{r}
+linear_graph8 <- data_part6 %>%
+  ggplot(aes(x = date, y = urate, col = covid)) +
+  geom_point() + 
+  geom_vline(xintercept = ymd("2020-04-01")) +
+  ylab("Unemployment Rate") +
+  xlab("Date") +
+  geom_smooth(aes(group = covid), method = 'lm', formula = y ~ x)
+linear_graph8
+```
+
+Part 1: How has COVID affected the health of the retail industry, as measured by employment?
+The analysis looks at the unemployment rate before and after COVID19 allowing us to measure the health of the retail industry over the course of our time period. 
+We first found that the unemployment rate before COVID19 was 3.24% in the retail industry. However, when looking at our data and the results we found, unemployment rose by 9.01% to a total of 12.25%. In the second model, we factored in polynomials and got a new unemployment rate of 4.02% and found that after covid the unemployment rate rose by 9.42% to a total of 13.44%. By looking at our graphs, you could see that the unemployment rate tapers off the further into covid we go. This shows that the retail industry is in the process of recovering but has not fully recovered yet as there are still covid restrictions in place. 
+
+Question 1 Linear Model:
+```{r}
+model1_part1 <- lm(urate ~ date_centered*covid + region, data = data_only_retail)
+export_summs(model1_part1)
+```
+Graph of Linear Model:
+```{r}
+linear_graph1 <- data_only_retail %>%
+  ggplot(aes(x = date, y = urate, col = covid)) +
+  geom_point() + 
+  geom_vline(xintercept = ymd("2020-04-01")) +
+  ylab("Unemployment Rate") +
+  xlab("Date") +
+  geom_smooth(aes(group = covid), method = 'lm', formula = y ~ x)
+linear_graph1
+```
+
+Question 1 Polynomial Model:
+```{r}
+model2_part1 <- lm(urate ~ date_centered*covid + I(date_centered^2)*covid + region, data = data_only_retail)
+export_summs(model2_part1)
+```
+
+Graph of Polynomial Model:
+```{r}
+poly_graph1 <- data_only_retail %>%
+  ggplot(aes(x = date, y = urate, col = covid)) +
+  geom_point() + 
+  ylab("Unemployment Rate") +
+  xlab("Date") +
+  geom_vline(xintercept = ymd("2020-04-01")) +
+  geom_smooth(aes(group = covid), method = 'lm', formula = y ~ poly(x, 2))
+poly_graph1
+```
+
+Part 2: How has retail fared relative to other industries?
+
+To answer the question of: How has retail fared relative to other industries?, we decided to evaluate the data we had from our 6th iteration of our data and use a linear model. We used unemployment to measure the health of each industry that was categorized by industry names, without the Military. By using the unemployment rate, we measured it against covid, industry name and region alongside some interaction terms between covid and industry name, we found that the model returned us an unemployment rate of 3.24%, which was close to the 3.4% in the United States prior to the introduction of our treatment: COVID19. After the treatment of COIVD19, we found that the unemployment rate jumped by 9.03% to a total of 12.27%, four times the amount prior. By looking at the coefficients of our interaction terms when COVID19 occurred and the different industries:
+
+- Agriculture % outdoor trades. Education & healthcare & food, professional & management, wholesale trade, all saw a 0.01% smaller increase in unemployment after COVID19 than the retail industry. 
+- While arts & entertainment & rec & food, construction, finance & insurance, information, public administration, all saw a 0.02% smaller increase in unemployment after COVID19 than the retail industry. 
+
+While maintaining all of our observations, and a 0.96 r^2, we were confident in saying that none of the industries fared better than the rest, as the differences were so minute. But it was evident that the unemployment rate was raised due regardless of the effects to the different businesses.
+
+We also decided to look at the results with a polynomial regression. By doing so we got an r^2 value of 0.99, with the same amount of observations as our linear model. However, we lost all of our coefficients for the interaction terms of COVID19 impacting the individual industries. Therefore, we did not find a reason to believe that the polynomial regression would have been a better fit model than the linear one. 
+
+Question 2 Linear Model:
+```{r}
+model1_part2 <- lm(urate ~ date_centered*covid + covid*indname + region, data = data_part6)
+export_summs(model1_part2)
+```
+
+Question 2 Polynomial Model:
+```{r}
+model2_part2 <- lm(urate ~ date_centered*covid + I(date_centered^2)*covid + covid*indname + region, data = data_part6)
+export_summs(model2_part2)
+```
+
+Part 3: What has changed about who is working and earning money?
+
+When looking at who is working and earning money, we looked at three different variables:  region, education, and family income. We wanted to see how groups within each of these variables changed so we can see who is working and earning money. Through our three models, we found statistically significant evidence to suggest that the unemployment rate in the IPUMS data increased by 9.02 percentage points. When looking at these different variables, we found some statistically significant evidence to support the amount of people working and earning money has been changing over these different regions, education levels, and income levels. While our findings are statistically significant, they are not practically significant. 
+In our first model, region, we looked at the 8 different regions of the United States, as denoted by the survey. As for our intercept, there was a 3.24 percentage point increase in the unemployment rate for Pacific Coast states. For the different regions, while we had statistically significant data, it was not practically significant. The only regions with statistically significant changes after covid for the unemployment rate was the East South Central Division with -.03, New England Division with -.02, South Atlantic Division with .01, and West South Central Division .02. That being said, these were not practically significant changes. 
+As for education, we saw similar results for after covid. The only statistically significant change was a -.02 lower increase in the unemployment rate for people with PHDs. That being said, it still is not practically significant. 
+As for income, we saw similar results after covid. The only statistically significant change was a .01 lower increase in the unemployment rate for high earners.
+Overall, while we do have statistically significant evidence to support that the unemployment rates in some regions and education levels were affected by covid, in practice they are not as significant since they are only by a few tenths of a percent. With an R-Squared of .96 for all of our models, we are confident that the changes in working status by region, income, and education level did not change in a practically significant way. 
+
+Question 3 Model 1 (REGION):
+```{r}
+model1_part3 <- lm(urate ~ date_centered*covid + covid*region, data = data_part6)
+export_summs(model1_part3)
+```
+
+Question 3 Model 2 (EDUCATION):
+```{r}
+model2_part3 <- lm(urate ~ date_centered*covid + region + covid*education, data = data_part6)
+export_summs(model2_part3)
+```
+
+Question 3 Model 3 (familyincome):
+```{r}
+model3_part3 <- lm(urate ~ date_centered*covid + region + covid*familyincome, data = data_part6)
+export_summs(model3_part3)
+```
+
+Conclusion:
+
+After reviewing the models that we ran, we found that Covid had drastic effects on employment in both retail and other sectors of work. Our models supported this with high coefficients on Covid’s impact in April 2020 showing a 9-9.5% increase in unemployment attributable to Covid. When looking at the individual factors it is hard to ascertain reliable measurable effects. Much of our results were statistically significant however their impact was so small (often tenths of a percent) that we had trouble assigning practical significance to any one factor. Covid’s impact on the retail industry and its workers is clear, however, it appears to have blanked the economy with similar effects throughout. Nearly every business and sector were affected equally by lockdowns, supply chain difficulties, profit decreases, and workflow disruptions such that attributing any singular factor’s effect on employment was difficult. Overall, our analyses supported the claim that the retail sector was hit hard in terms of employment by Covid, but we had difficulty attributing individual effects given how widespread the pandemic's effects were. 
+

@@ -1,0 +1,119 @@
+---
+title: "Data Translation Assignment"
+author: "Kyle Bailey, Ryan Cowles, Joshua Jayandran, Samuel Suk, George Thiss, and  Octavian Tofoleanu"
+date: "03/18/2022"
+output: slidy_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(tidyverse)
+library(purrr)
+library(lubridate)
+library(vtable)
+library(car)
+library(jtools)
+library(fixest)
+library(wooldridge)
+library(stringr)
+library(vtable)
+library(plm)
+library(rdrobust)
+
+data_part6 <- read_csv("Data/FinalData.csv")
+data_part6 <- data_part6 %>% mutate(familyincome = factor(familyincome), education = factor(education), race = factor(race), REGION = factor(REGION), indname = factor(indname), familyincome2 = factor(familyincome2), region = factor(region))
+data_test <- data_part6 %>% filter(date < ymd("2019-01-01"))
+data_part6 <- data_part6 %>% filter(date >= ymd("2019-01-01"))
+
+data_part6 <- within(data_part6, familyincome <- relevel(familyincome, ref = "lowearner"))
+data_part6 <- within(data_part6, education <- relevel(education, ref = "highschool"))
+data_part6 <- within(data_part6, indname <- relevel(indname, ref = "Retail Trade"))
+data_part6 <- within(data_part6, familyincome2 <- relevel(familyincome2, ref = "bottom25%"))
+data_part6 <- within(data_part6, region <- relevel(region, ref = "PacificDivision"))
+
+data_test <- within(data_test, familyincome <- relevel(familyincome, ref = "lowearner"))
+data_test <- within(data_test, education <- relevel(education, ref = "highschool"))
+data_test <- within(data_test, indname <- relevel(indname, ref = "Retail Trade"))
+data_test <- within(data_test, familyincome2 <- relevel(familyincome2, ref = "bottom25%"))
+data_test <- within(data_test, region <- relevel(region, ref = "PacificDivision"))
+
+data_only_retail <- data_part6 %>% filter(indname == "Retail Trade")
+```
+
+## Introduction 
+
+- We saw a sharp jump discontinuity in April of 2020 with a nearly 9% increase in unemployment following our defined start of Covid.
+- Our regression analyses primarily focused on the variables we felt would impact unemployment like employment sector, region, education level, and race.
+
+## Methodology - Regression Discontinuity
+
+Assumptions:
+- Our first assumption is necessary as a prerequisite for RD models, that the error term does not jump to the point of discontinuity. In this case, we’re assuming no other variable besides Covid is explaining the dramatic effect on the unemployment rate at the cutoff.
+- According to the CDC, March 15th was when states began implementing lockdowns in the US, which would correlate with the 15th month in our data set; however, we use April (16th month) as the cut off month for our time based running variable because we want to account for the lag effect of policy on the labor economy.
+- We’re assuming individuals in April who lost their job, and thereby contribute to the unemployment rate, did not do so through self-selection or any form of manipulation because the incentive to lose one’s job is minimal as it means sacrificing earnings. Besides a person’s industry, geography, education, and race, we’re assuming no outlying difference among individuals around the cutoff.
+
+## Graph of Unemployment Rate and Date Across all Industries 2017 and 2018:
+```{r, echo = FALSE, results = 'hide'}
+linear_graph7 <- data_test %>%
+  ggplot(aes(x = date, y = urate, col = covid)) +
+  geom_point() + 
+  geom_vline(xintercept = ymd("2018-04-01")) +
+  ylab("Unemployment Rate") +
+  xlab("Date") +
+  geom_smooth(aes(group = covid), method = 'lm', formula = y ~ x)
+linear_graph7
+```
+
+## Graph of Unemployment Rate and Date for 2019 and 2020 Across all Industries:
+```{r, echo = FALSE, results = 'hide'}
+linear_graph8 <- data_part6 %>%
+  ggplot(aes(x = date, y = urate, col = covid)) +
+  geom_point() + 
+  geom_vline(xintercept = ymd("2020-04-01")) +
+  ylab("Unemployment Rate") +
+  xlab("Date") +
+  geom_smooth(aes(group = covid), method = 'lm', formula = y ~ x)
+linear_graph8
+```
+
+## How has retail fared relative to other industries?
+
+- we found that the model returned us an unemployment rate of for the retail industry of 3.24%, which was close to the 3.4% in the United States prior to the introduction of our treatment: COVID19. After the treatment of COIVD19, we found that the unemployment rate for the retail industry jumped by 9.03% to a total of 12.27%
+- Agriculture. Education & healthcare & food, professional & management, wholesale trade, all saw a 0.01% smaller increase in unemployment after COVID19 than the retail industry.
+- While arts & entertainment & rec, construction, finance & insurance, information, public administration, all saw a 0.02% smaller increase in unemployment after COVID19 than the retail industry.
+
+## Linear Model Controlling for Region
+```{r, echo =  TRUE}
+model1_part2 <- lm(urate ~ date_centered*covid + covid*indname + region, data = data_part6)
+export_summs(model1_part2)
+```
+
+## Polynomial Model Controlling for Region
+```{r, echo = TRUE}
+model2_part2 <- lm(urate ~ date_centered*covid + I(date_centered^2)*covid + covid*indname + region, data = data_part6)
+export_summs(model2_part2)
+```
+
+## What has changed about who is working and earning money?
+
+## Employment Changes by Region
+- The only regions with statistically significant changes after covid for the unemployment rate was the East South Central Division with -.03, New England Division with -.02, South Atlantic Division with .01, and West South Central Division .02.
+```{r, echo = TRUE}
+model1_part3 <- lm(urate ~ date_centered*covid + covid*region, data = data_part6)
+export_summs(model1_part3)
+```
+
+## Employment Changes by Education Level
+- As for education, we saw similar results for after covid. The only statistically significant change was a -.02 lower increase in the unemployment rate for people with PHDs.
+```{r, echo = TRUE}
+model2_part3 <- lm(urate ~ date_centered*covid + region + covid*education, data = data_part6)
+export_summs(model2_part3)
+```
+
+## Employment Changes by Family Income Level
+- As for income, we saw similar results after covid. The only statistically significant change was a .01 lower increase in the unemployment rate for high earners.
+```{r, echo = TRUE}
+model3_part3 <- lm(urate ~ date_centered*covid + region + covid*familyincome, data = data_part6)
+export_summs(model3_part3)
+```
+
